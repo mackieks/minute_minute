@@ -479,7 +479,8 @@ u32 _main(void *base)
         isfs_init(ISFSVOL_SLC);
         slc_mounted = true;
         serial_send_u32(0x5D4D0003);
-        isfshax_refresh();
+        int res = isfshax_refresh();
+        prsh_add_entry("isfshax_refresh", (void*)res, 0, NULL);
         serial_send_u32(0x5D4D0004);
         bool ok = read_ancast("slc:/sys/hax/fw.img");
         if(ok)
@@ -859,6 +860,15 @@ u32 _main(void *base)
     prsh_reset();
     prsh_init();
 
+#ifndef FASTBOOT
+    int isfshax_refresh = 0;
+    prsh_get_entry("isfshax_refresh", (void**)&isfshax_refresh, NULL);
+    if(isfshax_refresh){
+        print_isfshax_refresh_error(isfshax_refresh);
+        console_power_to_continue();
+    }
+#endif
+
     // If we're coming from boot1 and PRSH is encrypted, the new boot_info is what we should use.
     // Otherwise, if we're not coming from boot1, copy to boot_info_copy
     if (prsh_is_encrypted && main_loaded_from_boot1)
@@ -992,11 +1002,6 @@ u32 _main(void *base)
 skip_menu:
 #ifdef MEASURE_TIME
     u32 deinit_start = read32(LT_TIMER);
-#endif 
-#ifdef FASTBOOT
-    prsh_set_entry("minute_boot", (void*)1, 0);
-#else
-    prsh_set_entry("minute_boot", (void*)(menu_main.selected + 1), 0);
 #endif
 
     if(!no_gpu)
@@ -1029,6 +1034,11 @@ skip_menu:
             }
 
             if(boot.vector) {
+#ifdef FASTBOOT
+                prsh_set_entry("minute_boot", (void*)1, 0);
+#else
+                prsh_set_entry("minute_boot", (void*)(menu_main.selected + 1), 0);
+#endif
                 printf("Vectoring to 0x%08lX...\n", boot.vector);
             } else {
                 printf("No vector address, hanging!\n");
