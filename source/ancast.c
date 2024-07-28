@@ -370,6 +370,10 @@ int ancast_fini(ancast_ctx* ctx)
     return 0;
 }
 
+static u8* get_key(void){
+    return redotp?redotp->fw_ancast_key:otp.fw_ancast_key;
+}
+
 typedef struct {
     u32 header_size;
     u32 loader_size;
@@ -398,7 +402,7 @@ u32 ancast_iop_load(const char* path)
 #if !defined(MINUTE_BOOT1) || defined(ISFSHAX_STAGE2)
     if(!(ctx.header.unk1 & 0b1)) {
         aes_reset();
-        aes_set_key(otp.fw_ancast_key);
+        aes_set_key(get_key());
 
         static const u8 iv[16] = {0x91, 0xC9, 0xD0, 0x08, 0x31, 0x28, 0x51, 0xEF,
                                   0x6B, 0x22, 0x8B, 0xF1, 0x4B, 0xAD, 0x43, 0x22};
@@ -468,7 +472,7 @@ u32 ancast_iop_load_from_raw_sector(int sector_idx)
 #ifndef MINUTE_BOOT1
     if(!(ctx.header.unk1 & 0b1)) {
         aes_reset();
-        aes_set_key(otp.fw_ancast_key);
+        aes_set_key(get_key());
 
         static const u8 iv[16] = {0x91, 0xC9, 0xD0, 0x08, 0x31, 0x28, 0x51, 0xEF,
                                   0x6B, 0x22, 0x8B, 0xF1, 0x4B, 0xAD, 0x43, 0x22};
@@ -515,7 +519,7 @@ u32 ancast_iop_load_from_memory(void* ancast_mem)
 #if !defined(MINUTE_BOOT1) || defined(ISFSHAX_STAGE2)
     if(!(ctx.header.unk1 & 0b1)) {
         aes_reset();
-        aes_set_key(otp.fw_ancast_key);
+        aes_set_key(get_key());
 
         static const u8 iv[16] = {0x91, 0xC9, 0xD0, 0x08, 0x31, 0x28, 0x51, 0xEF,
                                   0x6B, 0x22, 0x8B, 0xF1, 0x4B, 0xAD, 0x43, 0x22};
