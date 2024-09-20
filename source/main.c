@@ -59,9 +59,10 @@
 #include <malloc.h>
 #include <dirent.h>
 
-//#define MEASURE_TIME
+// #define MEASURE_TIME
 
-static struct {
+static struct
+{
     int mode;
     u32 vector;
     int is_patched;
@@ -91,72 +92,84 @@ void silly_tests();
 
 extern otp_t otp;
 
-static u32 boot1_patch_isfshax(void){
+static u32 boot1_patch_isfshax(void)
+{
     serial_send_u32(0x7D4D0001);
     u32 vector = ancast_iop_load("slc:/sys/title/00050010/1000400a/code/fw.img");
-    if(!vector)
+    if (!vector)
         return vector;
     serial_send_u32(0x7D4D0003);
-    if(!isfshax_patch_apply(vector))
+    if (!isfshax_patch_apply(vector))
         return 0;
     serial_send_u32(0x7D4D0004);
     return vector;
-
 }
+
+#define MINUTE_BOOT1 1
+#define ISFSHAX_STAGE2 1
 
 #ifdef MINUTE_BOOT1
 
-static bool read_ancast(const char *path){
+static bool read_ancast(const char *path)
+{
     FILE *f = fopen(path, "rb");
-    if (!f) {
+    if (!f)
+    {
         return false;
     }
-    size_t read = fread((void*)ALL_PURPOSE_TMP_BUF, 1, 0x800000, f);
-    if (!read) {
+    size_t read = fread((void *)ALL_PURPOSE_TMP_BUF, 1, 0x800000, f);
+    if (!read)
+    {
         return false;
     }
     fclose(f);
 
-    return *(u32*)ALL_PURPOSE_TMP_BUF == ANCAST_MAGIC; 
+    return *(u32 *)ALL_PURPOSE_TMP_BUF == ANCAST_MAGIC;
 }
 
-static bool load_fw_from_sd_fat(void){
-        FRESULT res = FR_OK;
-        static FATFS fatfs = {0};
-        static devoptab_t devoptab = {0};
-        FIL f = {0};
-        unsigned int read;
+static bool load_fw_from_sd_fat(void)
+{
+    FRESULT res = FR_OK;
+    static FATFS fatfs = {0};
+    static devoptab_t devoptab = {0};
+    FIL f = {0};
+    unsigned int read;
 
-        serial_send_u32(0x5D5E0004);
+    serial_send_u32(0x5D5E0004);
 
-        res = f_mount(&fatfs, "sdmc:", 1);
-        if (res != FR_OK) {
-            sdcard_init(); // TODO whyyyyy
-            res = f_mount(&fatfs, "sdmc:", 1);
-            if (res != FR_OK) {
-                return false;
-            }
-        }
-        res = f_open(&f, "sdmc:/fw.img", FA_OPEN_EXISTING | FA_READ);
-        if (res != FR_OK) {
-            return false;
-        }
-        res = f_read(&f, (void*)ALL_PURPOSE_TMP_BUF, 0x800000, &read);
-        f_close(&f);
-        if (res != FR_OK) {
-            return false;
-        }
-
-        serial_send_u32(0x5D5E0008);
-
-        return *(u32*)ALL_PURPOSE_TMP_BUF == ANCAST_MAGIC;
-}
-
-static u32 load_fw_from_sd(bool retry_forever){
-    u32 vector = 0;
-    for(int i = 0; !vector && (i<5 || retry_forever); i++)   
+    res = f_mount(&fatfs, "sdmc:", 1);
+    if (res != FR_OK)
     {
-        if(i==1)
+        sdcard_init(); // TODO whyyyyy
+        res = f_mount(&fatfs, "sdmc:", 1);
+        if (res != FR_OK)
+        {
+            return false;
+        }
+    }
+    res = f_open(&f, "sdmc:/fw.img", FA_OPEN_EXISTING | FA_READ);
+    if (res != FR_OK)
+    {
+        return false;
+    }
+    res = f_read(&f, (void *)ALL_PURPOSE_TMP_BUF, 0x800000, &read);
+    f_close(&f);
+    if (res != FR_OK)
+    {
+        return false;
+    }
+
+    serial_send_u32(0x5D5E0008);
+
+    return *(u32 *)ALL_PURPOSE_TMP_BUF == ANCAST_MAGIC;
+}
+
+static u32 load_fw_from_sd(bool retry_forever)
+{
+    u32 vector = 0;
+    for (int i = 0; !vector && (i < 5 || retry_forever); i++)
+    {
+        if (i == 1)
             smc_set_notification_led(LEDRAW_ORANGE_PULSE);
         serial_send_u32(0x5D5D0001);
         printf("Initializing SD card...\n");
@@ -164,13 +177,15 @@ static u32 load_fw_from_sd(bool retry_forever){
         serial_send_u32(0x6D6D0001);
 
         int loaded_from_fat = load_fw_from_sd_fat();
-        if (loaded_from_fat) {
-            vector = ancast_iop_load_from_memory((void*)ALL_PURPOSE_TMP_BUF);
+        if (loaded_from_fat)
+        {
+            vector = ancast_iop_load_from_memory((void *)ALL_PURPOSE_TMP_BUF);
         }
-        else {
+        else
+        {
             vector = ancast_iop_load_from_raw_sector(0x80);
         }
-        
+
         serial_send_u32(0x5D5D0004);
     }
     printf("Shutting down SD card...\n");
@@ -178,25 +193,26 @@ static u32 load_fw_from_sd(bool retry_forever){
     return vector;
 }
 
-boot_info_t *init_prsh_get_bootinfo(void) {
+boot_info_t *init_prsh_get_bootinfo(void)
+{
     serial_send_u32(0x50525348); // PRSH
     // Set up PRSH here
     // prsh_decrypt();
     prsh_reset();
     prsh_init();
     boot_info_t *boot_info;
-    size_t boot_info_size;
-    int res = prsh_get_entry("boot_info", (void**) &boot_info, &boot_info_size);
-    if(!res && boot_info_size >= sizeof(boot_info_t)){
-        return boot_info;
-    }
-    return NULL;
+
+    prsh_copy_default_bootinfo(boot_info);
+    printf("copied default bootinfo");
+
+    return boot_info;
 }
 
 u32 _main(void *base)
 {
     (void)base;
-    int res = 0; (void)res;
+    int res = 0;
+    (void)res;
 
     gfx_init();
     exi_init();
@@ -214,7 +230,7 @@ u32 _main(void *base)
     udelay(500);
 
     // Same as boot1:
-    //srand(read32(LT_TIMER));
+    // srand(read32(LT_TIMER));
     // boot0 already disabled
     set32(LT_RESETS_COMPAT, RSTB_IOMEM | RSTB_IOPI);
     set32(LT_EXICTRL, 1);
@@ -244,90 +260,12 @@ u32 _main(void *base)
 
     u32 pflags_val = 0;
 
-#ifndef ISFSHAX_STAGE2
-    // 0x00020721 on extra cold booting (fresh from power plug)
-    // 0x02020321 on warm cold booting (or 0x02000221?)
-    u32 rtc_ctrl0 = rtc_get_ctrl0();
-    serial_send_u32(rtc_ctrl0);
-
-    u32 syscfg1_val = read32(LT_SYSCFG1);
-
-    // Check if the CMPT_RETSTAT0 flag is raised
-    if (syscfg1_val & 0x04)
-        pflags_val = CMPT_RETSTAT0;
-
-    // Check if the CMPT_RETSTAT1 flag is raised
-    if (syscfg1_val & 0x08)
-        pflags_val |= CMPT_RETSTAT1;
-
-    // Check if the POFFLG_FPOFF flag is raised
-    if (rtc_ctrl0 & CTRL0_POFFLG_FPOFF)
-        pflags_val |= POFF_FORCED;
-
-    // Check if the POFFLG_4S flag is raised
-    if (rtc_ctrl0 & CTRL0_POFFLG_4S)
-        pflags_val |= POFF_4S;
-
-    // Check if the POFFLG_TMR flag is raised
-    if (rtc_ctrl0 & CTRL0_POFFLG_TMR)
-        pflags_val |= POFF_TMR;
-
-    // Check if the PONLG_TMR flag is raised
-    if (rtc_ctrl0 & CTRL0_PONLG_TMR)
-        pflags_val |= PON_TMR;
-
-    // Check if PONFLG_SYS is raised
-    if (rtc_ctrl0 & CTRL0_PONFLG_SYS)
-    {
-        pflags_val |= PON_SMC;
-
-        u32 sys_event = smc_get_events();
-
-        // POWER button was pressed
-        if (sys_event & SMC_POWER_BUTTON)
-            pflags_val |= PON_POWER_BTN;
-
-        // EJECT button was pressed
-        if (sys_event & SMC_EJECT_BUTTON)
-            pflags_val |= PON_EJECT_BTN;
-
-        // Wake 1 signal is active
-        if (sys_event & SMC_WAKE1)
-            pflags_val |= PON_WAKEREQ1_EVENT;
-
-        // Wake 0 signal is active
-        if (sys_event & SMC_WAKE0)
-            pflags_val |= PON_WAKEREQ0_EVENT;
-
-        // BT interrupt request is active
-        if (sys_event & SMC_BT_IRQ)
-            pflags_val |= PON_WAKEBT_EVENT;
-
-        // Timer signal is active
-        if (sys_event & SMC_TIMER)
-            pflags_val |= PON_SMC_TIMER;
-    }
-
-    // Raise POFFLG_TMR, PONFLG_SYS and some unknown flags
-    rtc_set_ctrl0(CTRL0_POFFLG_TMR | CTRL0_PONFLG_SYS | CTRL0_FLG_00800000 | CTRL0_FLG_00400000);
-
-    u32 rtc_ctrl1 = rtc_get_ctrl1();
-
-    // Check if SLEEP_EN is raised
-    if (rtc_ctrl1 & CTRL1_SLEEP_EN)
-        pflags_val |= PFLAG_DDR_SREFRESH; // Set DDR_SREFRESH power flag
-
-    serial_send_u32(0x464C4147);
-    serial_send_u32(pflags_val);
-    serial_send_u32(0x464C4147);
-
-#else 
     // ISFSHAX_STAGE2
-    // on ISFShax the flags were already extracted by boot1
+    // on ISFShax we got garbage flags cause SMC/RTC are absent, so copy in default flags
     boot_info_t *bootinfo = init_prsh_get_bootinfo();
-    if(bootinfo)
+    if (bootinfo)
         pflags_val = bootinfo->boot_state;
-#endif
+
     serial_send_u32(pflags_val);
 
     // Show a little flourish to indicate we have code exec
@@ -359,7 +297,6 @@ u32 _main(void *base)
             udelay(10000);
         }
     }
-    
 
     u32 mem_mode = 0;
 
@@ -381,7 +318,7 @@ u32 _main(void *base)
     else
     {
         // Pulse the ONIndicator
-        //smc_set_on_indicator(LED_PULSE);
+        // smc_set_on_indicator(LED_PULSE);
         smc_set_notification_led(LEDRAW_PURPLE_PULSE);
     }
 
@@ -389,7 +326,8 @@ u32 _main(void *base)
     serial_send_u32(latte_get_hw_version());
     serial_send_u32(0x4D454D32); // MEM2
 
-#ifndef ISFSHAX_STAGE2
+    // always do this:
+
     // Init DRAM
     init_mem2(mem_mode);
     udelay(500000);
@@ -398,45 +336,48 @@ u32 _main(void *base)
     int is_good = 1;
     for (int i = 0; i < 0x10; i++)
     {
-        if ( i )
+        if (i)
         {
             int v12 = (pflags_val & PFLAG_DDR_SREFRESH) ? mem_clocks_related_3(mem_mode | DRAM_MODE_40 | DRAM_MODE_20 | DRAM_MODE_4) : 0;
-            if ( v12 | mem_clocks_related_3(mem_mode | DRAM_MODE_40 | DRAM_MODE_20 | DRAM_MODE_SREFRESH) )
+            if (v12 | mem_clocks_related_3(mem_mode | DRAM_MODE_40 | DRAM_MODE_20 | DRAM_MODE_SREFRESH))
             {
                 is_good = 0;
                 break;
             }
         }
-        for (u32 j = 0x10000000; j != 0x10000400; j += 8 )
+        for (u32 j = 0x10000000; j != 0x10000400; j += 8)
         {
-            *(vu32*)j = 0x12345678;
-            *(vu32*)(j + 4) = 0x9ABCDEF0;
+            *(vu32 *)j = 0x12345678;
+            *(vu32 *)(j + 4) = 0x9ABCDEF0;
         }
 
         is_good = 1;
-        for (u32 j = 0x10000000; j != 0x10000400; j += 8 )
+        for (u32 j = 0x10000000; j != 0x10000400; j += 8)
         {
-            if (*(vu32*)j != 0x12345678) {
+            if (*(vu32 *)j != 0x12345678)
+            {
                 is_good = 0;
                 break;
             }
-            if (*(vu32*)(j + 4) != 0x9ABCDEF0) {
+            if (*(vu32 *)(j + 4) != 0x9ABCDEF0)
+            {
                 is_good = 0;
                 break;
             }
         }
-        if (is_good) break;
+        if (is_good)
+            break;
     }
 
-    if (!is_good) {
+    if (!is_good)
+    {
         serial_fatal();
     }
-#endif //NOT ISFSHAX_STAGE2
 
     serial_send_u32(0x4D454D30); // MEM0
 
     // Clear all MEM0
-    memset((void*)0x08000000, 0, 0x002E0000);
+    memset((void *)0x08000000, 0, 0x002E0000);
 
     // Standby Mode boot doesn't need to upclock
     if (!(pflags_val & PON_SMC_TIMER))
@@ -464,43 +405,20 @@ u32 _main(void *base)
         // Set DcdcPowerControl2 GPIO's state
         gpio_dcdc_pwrcnt2_set(1);
 
-        //smc_set_on_indicator(LED_ON);
+        // smc_set_on_indicator(LED_ON);
         smc_set_notification_led(LEDRAW_PURPLE);
     }
 
     bool slc_mounted = false;
 
-#ifdef ISFSHAX_STAGE2
-    //Skip ISFS boot by pressing power
-    if (!(smc_get_events() & SMC_POWER_BUTTON && !(pflags_val & (CMPT_RETSTAT0|CMPT_RETSTAT1)))) {
-        serial_send_u32(0x5D4D0001);
-        printf("Mounting SLC...\n");
-        irq_initialize();
-        isfs_init(ISFSVOL_SLC);
-        slc_mounted = true;
-        serial_send_u32(0x5D4D0003);
-        int res = isfshax_refresh();
-        prsh_add_entry("isfshax_refresh", (void*)res, 0, NULL);
-        serial_send_u32(0x5D4D0004);
-        bool ok = read_ancast("slc:/sys/hax/fw.img");
-        if(ok)
-            boot.vector = ancast_iop_load_from_memory((void*)ALL_PURPOSE_TMP_BUF);
-        serial_send_u32(0x5D4D0005);
-        if(boot.vector){
-            boot.mode = 0;
-            menu_reset();
-            minute_on_slc = true;
-            serial_send_u32(0x5D4D006);
-        }
-    }
-    #endif //ISFSHAX_STAGE2 
-    
-    if(!boot.vector)
+    if (!boot.vector)
         boot.vector = load_fw_from_sd(!slc_mounted);
 
 #ifdef ISFSHAX_STAGE2
-    if(slc_mounted){
-        if(!boot.vector) {
+    if (slc_mounted)
+    {
+        if (!boot.vector)
+        {
             serial_send_u32(0x5D4D0007);
             boot.vector = boot1_patch_isfshax();
         }
@@ -510,7 +428,8 @@ u32 _main(void *base)
     }
 #endif
 
-    if(boot.vector){
+    if (boot.vector)
+    {
         boot.mode = 0;
         menu_reset();
     }
@@ -528,23 +447,27 @@ boot:
     printf("Shutting down caches and MMU...\n");
     mem_shutdown();
     serial_send_u32(0x6D6D0004);
-    switch(boot.mode) {
-        case 0:
-            if(boot.vector) {
-                printf("Vectoring to 0x%08lX...\n", boot.vector);
-            } else {
-                printf("No vector address, hanging!\n");
-                smc_set_notification_led(LEDRAW_ORANGE_PULSE);
-                panic(0);
-            }
-            break;
-        //case 1: smc_power_off(); break;
-        //case 2: smc_reset(); break;
+    switch (boot.mode)
+    {
+    case 0:
+        if (boot.vector)
+        {
+            printf("Vectoring to 0x%08lX...\n", boot.vector);
+        }
+        else
+        {
+            printf("No vector address, hanging!\n");
+            smc_set_notification_led(LEDRAW_ORANGE_PULSE);
+            panic(0);
+        }
+        break;
+        // case 1: smc_power_off(); break;
+        // case 2: smc_reset(); break;
     }
     serial_send_u32(0x6D6D0005);
     // Let minute know that we're launched from boot1
     memcpy(BOOT1_PASSALONG->magic, PASSALONG_MAGIC_BOOT1, 8);
-    if(minute_on_slc)
+    if (minute_on_slc)
         memcpy(BOOT1_PASSALONG->magic_device, PASSALONG_MAGIC_DEVICE_SLC, 8);
     else
         memcpy(BOOT1_PASSALONG->magic_device, PASSALONG_MAGIC_DEVICE_SD, 8);
@@ -552,10 +475,12 @@ boot:
 #ifdef ISFSHAX_STAGE2
     memcpy(BOOT1_PASSALONG->magic_prsh, PASSALONG_MAGIC_PRSH_DECRYPTED, 8);
 
-    if(bootinfo) {
+    if (bootinfo)
+    {
         memcpy(&BOOT1_PASSALONG->boot_info, bootinfo, sizeof(boot_info_t));
     }
-    else {
+    else
+    {
         // TODO: fill in the rest of boot_info correctly
         prsh_copy_default_bootinfo(&BOOT1_PASSALONG->boot_info);
     }
@@ -579,13 +504,13 @@ void main_quickboot_isfshax(void);
 menu menu_main = {
     "minute", // title
     {
-            "Main menu", // subtitles
+        "Main menu", // subtitles
     },
     1, // number of subtitles
     {
         {"Patch (slc) and boot IOS (slc)", &main_quickboot_patch_slc},
         {"Patch (sd) and boot IOS redNAND", &main_quickboot_patch_rednand},
-        {"Patch (sd) and boot IOS (slc)", &main_quickboot_patch}, // options
+        {"Patch (sd) and boot IOS (slc)", &main_quickboot_patch},         // options
         {"Patch (sd) and boot sdmc:/ios_orig.img", &main_swapboot_patch}, // options
         {"Patch (sd) and boot sdmc:/ios_orig.img redNAND", &main_swapboot_patch_rednand},
         {"Patch ISFShax and boot IOS (slc)", &main_quickboot_isfshax},
@@ -605,14 +530,14 @@ menu menu_main = {
     },
     18, // number of options
     0,
-    0
-};
+    0};
 #endif // !FASTBOOT
 
 u32 _main(void *base)
 {
     (void)base;
-    int res = 0; (void)res;
+    int res = 0;
+    (void)res;
     int has_no_otp_bin = 0;
     int prsh_is_encrypted = 0;
     int boot_info_source = 0;
@@ -643,14 +568,18 @@ u32 _main(void *base)
     prsh_copy_default_bootinfo(&boot_info_copy);
 
     // Grab boot_info and anything else important from minute_boot1, if we detect it was run
-    if (!memcmp(BOOT1_PASSALONG->magic, PASSALONG_MAGIC_BOOT1, 8)) {
+    if (!memcmp(BOOT1_PASSALONG->magic, PASSALONG_MAGIC_BOOT1, 8))
+    {
         main_loaded_from_boot1 = 1;
         memset(BOOT1_PASSALONG->magic, 0, 8);
 
-        if (!memcmp(BOOT1_PASSALONG->magic_device, PASSALONG_MAGIC_DEVICE_SLC, 8)) {
+        if (!memcmp(BOOT1_PASSALONG->magic_device, PASSALONG_MAGIC_DEVICE_SLC, 8))
+        {
             minute_on_slc = true;
             memset(BOOT1_PASSALONG->magic_device, 0, 8);
-        } else if (!memcmp(BOOT1_PASSALONG->magic_device, PASSALONG_MAGIC_DEVICE_SD, 8)) {
+        }
+        else if (!memcmp(BOOT1_PASSALONG->magic_device, PASSALONG_MAGIC_DEVICE_SD, 8))
+        {
             minute_on_sd = true;
             memset(BOOT1_PASSALONG->magic_device, 0, 8);
         }
@@ -660,40 +589,47 @@ u32 _main(void *base)
             prsh_is_encrypted = 1;
         }
 
-        if (!memcmp(BOOT1_PASSALONG->magic_prsh, PASSALONG_MAGIC_PRSH_ENCRYPTED, 8) || !memcmp(BOOT1_PASSALONG->magic_prsh, PASSALONG_MAGIC_PRSH_DECRYPTED, 8)) {
+        if (!memcmp(BOOT1_PASSALONG->magic_prsh, PASSALONG_MAGIC_PRSH_ENCRYPTED, 8) || !memcmp(BOOT1_PASSALONG->magic_prsh, PASSALONG_MAGIC_PRSH_DECRYPTED, 8))
+        {
             memcpy(&boot_info_copy, &BOOT1_PASSALONG->boot_info, sizeof(boot_info_copy));
             boot_info_source = 1;
 
             memset(BOOT1_PASSALONG->magic_prsh, 0, sizeof(u32));
             memset(&BOOT1_PASSALONG->boot_info, 0, sizeof(boot_info_t));
         }
-        else if (prsh_exists_decrypted()) {
+        else if (prsh_exists_decrypted())
+        {
             prsh_is_encrypted = 0;
 
             prsh_reset();
             prsh_init();
 
-            res = prsh_get_entry("boot_info", (void**)&boot_info, &boot_info_size );
-            if(!res){
+            res = prsh_get_entry("boot_info", (void **)&boot_info, &boot_info_size);
+            if (!res)
+            {
                 memcpy(&boot_info_copy, boot_info, sizeof(boot_info_copy));
                 boot_info_source = 2;
             }
         }
     }
-    else {
-        if (prsh_exists_decrypted()) {
+    else
+    {
+        if (prsh_exists_decrypted())
+        {
             prsh_is_encrypted = 0;
 
             prsh_reset();
             prsh_init();
 
-            res = prsh_get_entry("boot_info", (void**)&boot_info, &boot_info_size );
-            if(!res){
+            res = prsh_get_entry("boot_info", (void **)&boot_info, &boot_info_size);
+            if (!res)
+            {
                 memcpy(&boot_info_copy, boot_info, sizeof(boot_info_copy));
                 boot_info_source = 3;
             }
         }
-        else {
+        else
+        {
             prsh_is_encrypted = 1;
         }
     }
@@ -704,19 +640,23 @@ u32 _main(void *base)
     }
 
     printf("boot_state: %X\n", boot_info_copy.boot_state);
- 
+
     bool is_eco_mode = boot_info_copy.boot_state & PON_SMC_TIMER;
-    if(is_eco_mode) {
+    if (is_eco_mode)
+    {
         printf("ECO Mode!\n");
         no_menu = no_gpu = true;
     }
 
     bool is_iosu_reload = boot_info_copy.boot_state & PFLAG_PON_RELOAD;
-    if(is_iosu_reload){
+    if (is_iosu_reload)
+    {
         no_gpu = true;
-        if(prsh_exists_decrypted()){
-            res = prsh_get_entry("minute_boot", (void**)&autoboot, NULL );
-            if(!res && autoboot){
+        if (prsh_exists_decrypted())
+        {
+            res = prsh_get_entry("minute_boot", (void **)&autoboot, NULL);
+            if (!res && autoboot)
+            {
                 printf("IOSU Reload! autobooting %d...\n", autoboot);
                 // IOSU reload, gpu is already inited by IOSU
                 no_menu = true;
@@ -726,7 +666,8 @@ u32 _main(void *base)
 #ifdef MEASURE_TIME
     u32 graphic_start = read32(LT_TIMER);
 #endif
-    if(!no_gpu) {
+    if (!no_gpu)
+    {
         gpu_display_init();
         gfx_init();
     }
@@ -736,21 +677,26 @@ u32 _main(void *base)
 
     printf("minute loading\n");
 
-    if (main_loaded_from_boot1) {
+    if (main_loaded_from_boot1)
+    {
         printf("minute was loaded from boot1 context!\n");
     }
 
     // Useful debug info
-    if (boot_info_source == 0) {
+    if (boot_info_source == 0)
+    {
         printf("boot_info source: default values\n");
     }
-    else if (boot_info_source == 1) {
+    else if (boot_info_source == 1)
+    {
         printf("boot_info source: set by minute_boot1\n");
     }
-    else if (boot_info_source == 2) {
+    else if (boot_info_source == 2)
+    {
         printf("boot_info source: pre-decrypted PRSH from boot1\n");
     }
-    else if (boot_info_source == 3) {
+    else if (boot_info_source == 3)
+    {
         printf("boot_info source: pre-decrypted PRSH not from boot1\n");
     }
 
@@ -778,7 +724,8 @@ u32 _main(void *base)
 
     printf("Mounting SD card...\n");
     res = ELM_Mount();
-    if(res) {
+    if (res)
+    {
         printf("Error while mounting SD card (%d).\n", res);
     }
 #ifdef MEASURE_TIME
@@ -787,27 +734,29 @@ u32 _main(void *base)
 
     crypto_check_de_Fused();
 
-
     // Write out our dumped OTP, if valid
-    if (read32(PRSHHAX_OTPDUMP_PTR) == PRSHHAX_OTP_MAGIC) {
+    if (read32(PRSHHAX_OTPDUMP_PTR) == PRSHHAX_OTP_MAGIC)
+    {
         write32(PRSHHAX_OTPDUMP_PTR, 0);
-        FILE* f_otp = fopen("sdmc:/otp.bin", "wb");
+        FILE *f_otp = fopen("sdmc:/otp.bin", "wb");
         if (f_otp)
         {
-            fwrite((void*)(PRSHHAX_OTPDUMP_PTR+4), sizeof(otp), 1, f_otp);
+            fwrite((void *)(PRSHHAX_OTPDUMP_PTR + 4), sizeof(otp), 1, f_otp);
             fclose(f_otp);
 
             printf("OTP dumped successfully and was written to `sdmc:/otp.bin`.\n");
 
             console_power_to_continue();
         }
-        else {
+        else
+        {
             printf("OTP dumped, but couldn't open `sdmc:/otp.bin`!\n");
 
-            u8* otp_iter = (u8*)(PRSHHAX_OTPDUMP_PTR+4);
+            u8 *otp_iter = (u8 *)(PRSHHAX_OTPDUMP_PTR + 4);
             for (int i = 0; i < 0x400; i++)
             {
-                if (i && i % 16 == 0) {
+                if (i && i % 16 == 0)
+                {
                     printf("\n");
                 }
                 printf("%02x ", *otp_iter++);
@@ -817,9 +766,11 @@ u32 _main(void *base)
             console_power_to_continue();
         }
 
-        memcpy(&otp, (void*)(PRSHHAX_OTPDUMP_PTR+4), sizeof(otp));
+        memcpy(&otp, (void *)(PRSHHAX_OTPDUMP_PTR + 4), sizeof(otp));
         has_no_otp_bin = 0;
-    } else if (read32(PRSHHAX_OTPDUMP_PTR) == PRSHHAX_FAIL_MAGIC) {
+    }
+    else if (read32(PRSHHAX_OTPDUMP_PTR) == PRSHHAX_FAIL_MAGIC)
+    {
         write32(PRSHHAX_OTPDUMP_PTR, 0);
         printf("boot1 never jumped to payload! Offset or SEEPROM version might be incorrect.\n");
         printf("(try it again just in case, sometimes the resets can get weird)\n");
@@ -829,16 +780,17 @@ u32 _main(void *base)
 
     if (crypto_otp_is_de_Fused)
     {
-        //console_power_to_continue();
+        // console_power_to_continue();
 
         printf("Console is de_Fused! Loading sdmc:/otp.bin...\n");
-        FILE* otp_file = fopen("sdmc:/otp.bin", "rb");
+        FILE *otp_file = fopen("sdmc:/otp.bin", "rb");
         if (otp_file)
         {
             fread(&otp, sizeof(otp), 1, otp_file);
             fclose(otp_file);
         }
-        else {
+        else
+        {
             printf("Failed to load `sdmc:/otp.bin`!\nFirmware will fail to load.\n");
             has_no_otp_bin = 1;
 
@@ -862,8 +814,9 @@ u32 _main(void *base)
 
 #ifndef FASTBOOT
     int isfshax_refresh = 0;
-    prsh_get_entry("isfshax_refresh", (void**)&isfshax_refresh, NULL);
-    if(isfshax_refresh){
+    prsh_get_entry("isfshax_refresh", (void **)&isfshax_refresh, NULL);
+    if (isfshax_refresh)
+    {
         print_isfshax_refresh_error(isfshax_refresh);
         console_power_to_continue();
     }
@@ -873,25 +826,29 @@ u32 _main(void *base)
     // Otherwise, if we're not coming from boot1, copy to boot_info_copy
     if (prsh_is_encrypted && main_loaded_from_boot1)
     {
-        res = prsh_get_entry("boot_info", (void**)&boot_info, &boot_info_size );
-        if(!res) {
+        res = prsh_get_entry("boot_info", (void **)&boot_info, &boot_info_size);
+        if (!res)
+        {
             printf("Setting boot_info to boot1 passalong.\n");
             memcpy(boot_info, &boot_info_copy, sizeof(boot_info_copy));
             print_bootinfo(boot_info);
         }
     }
-    else {
+    else
+    {
 
-        res = prsh_get_entry("boot_info", (void**)&boot_info, &boot_info_size );
-        if(!res) {
+        res = prsh_get_entry("boot_info", (void **)&boot_info, &boot_info_size);
+        if (!res)
+        {
             printf("boot_info exists, making copy.\n");
             memcpy(&boot_info_copy, boot_info, sizeof(boot_info_copy));
             print_bootinfo(boot_info);
         }
     }
 
-    res = prsh_get_entry("minute_on_slc", (void**)&minute_on_slc_tmp, &minute_on_slc_size );
-    if(!res){
+    res = prsh_get_entry("minute_on_slc", (void **)&minute_on_slc_tmp, &minute_on_slc_size);
+    if (!res)
+    {
         minute_on_slc = true;
         minute_on_sd = false;
     }
@@ -906,22 +863,25 @@ u32 _main(void *base)
 #endif
 
     // idk?
-    if (main_loaded_from_boot1) {
+    if (main_loaded_from_boot1)
+    {
         write32(0xC, 0x20008000);
     }
 
-    if(sdcard_check_card() == SDMMC_NO_CARD){
+    if (sdcard_check_card() == SDMMC_NO_CARD)
+    {
         printf("No SD card inserted!\n");
         isfs_init(ISFSVOL_SLC);
-        DIR* dir = opendir(slc_plugin_dir);
-        if (dir) {
+        DIR *dir = opendir(slc_plugin_dir);
+        if (dir)
+        {
             closedir(dir);
             printf("No SD Card found, autobooting SLC\n");
             autoboot = 1;
         }
     }
 
-    //isfs_test();
+    // isfs_test();
 
 #if 0
     if (crypto_otp_is_de_Fused && has_no_otp_bin) {
@@ -931,13 +891,15 @@ u32 _main(void *base)
 #endif
 
     // Can't boot w/o OTP
-    if (has_no_otp_bin) {
+    if (has_no_otp_bin)
+    {
         printf("No OTP bin, showing menu...\n");
         autoboot = false;
     }
 
     // ~Triple press opens menu
-    if (smc_get_events() & SMC_POWER_BUTTON) {
+    if (smc_get_events() & SMC_POWER_BUTTON)
+    {
         printf("Power button spam, showing menu...\n");
         autoboot = false;
     }
@@ -949,43 +911,47 @@ u32 _main(void *base)
     main_quickboot_patch_slc();
 #else
     // Prompt user to skip autoboot, time = 0 will skip this.
-    if(autoboot)
+    if (autoboot)
     {
-        while((autoboot_timeout_s-- > 0) && autoboot)
+        while ((autoboot_timeout_s-- > 0) && autoboot)
         {
             printf("Autobooting in %d seconds...\n", (int)autoboot_timeout_s + 1);
             printf("Press the POWER button or EJECT button to skip autoboot.\n");
-            for(u32 i = 0; i < 1000000; i += 100000)
+            for (u32 i = 0; i < 1000000; i += 100000)
             {
                 // Don't wait in ECO mode or IOSU reload.
-                if (no_menu) break;
+                if (no_menu)
+                    break;
 
                 // Get input at .1s intervals.
                 u8 input = smc_get_events();
                 udelay(100000);
-                if((input & SMC_EJECT_BUTTON) || (input & SMC_POWER_BUTTON)) {
+                if ((input & SMC_EJECT_BUTTON) || (input & SMC_POWER_BUTTON))
+                {
                     autoboot = false;
                     break;
                 }
             }
         }
     }
-    
+
     // Try to autoboot if specified, if it fails just load the menu.
-    if(autoboot && main_autoboot() == 0) {
+    if (autoboot && main_autoboot() == 0)
+    {
         printf("Autobooting...\n");
     }
     else
     {
         smc_get_events();
-        //leave ODD Power on for HDDs
-        if (has_no_otp_bin || 
-                (seeprom.bc.sata_device != SATA_TYPE_GEN2HDD && 
-                 seeprom.bc.sata_device != SATA_TYPE_GEN1HDD))
+        // leave ODD Power on for HDDs
+        if (has_no_otp_bin ||
+            (seeprom.bc.sata_device != SATA_TYPE_GEN2HDD &&
+             seeprom.bc.sata_device != SATA_TYPE_GEN1HDD))
             smc_set_odd_power(false);
 
         // Shut down if in ECO mode w/o a valid autoboot.
-        if (no_menu) {
+        if (no_menu)
+        {
             boot.mode = 1;
             smc_set_notification_led(LEDRAW_RED);
             goto skip_menu;
@@ -1004,7 +970,7 @@ skip_menu:
     u32 deinit_start = read32(LT_TIMER);
 #endif
 
-    if(!no_gpu)
+    if (!no_gpu)
         gpu_cleanup();
 
     printf("Unmounting SLC...\n");
@@ -1013,11 +979,11 @@ skip_menu:
 #ifndef FASTBOOT
     printf("Shutting down MLC...\n");
     mlc_exit();
-    
+
     printf("Shutting down SD card...\n");
     ELM_Unmount();
     sdcard_exit();
-#endif //!FASTBOOT
+#endif //! FASTBOOT
 
     printf("Shutting down interrupts...\n");
     irq_shutdown();
@@ -1025,71 +991,84 @@ skip_menu:
     printf("Shutting down caches and MMU...\n");
     mem_shutdown();
 
-    switch(boot.mode) {
-        case 0:
-            if (boot.vector && main_force_pause) {
-                printf("IOS is loaded and ready to launch!\n");
-                printf("Swap SD card now...\n");
-                console_power_to_continue();
-            }
+    switch (boot.mode)
+    {
+    case 0:
+        if (boot.vector && main_force_pause)
+        {
+            printf("IOS is loaded and ready to launch!\n");
+            printf("Swap SD card now...\n");
+            console_power_to_continue();
+        }
 
-            if(boot.vector) {
+        if (boot.vector)
+        {
 #ifdef FASTBOOT
-                prsh_set_entry("minute_boot", (void*)1, 0);
+            prsh_set_entry("minute_boot", (void *)1, 0);
 #else
-                prsh_set_entry("minute_boot", (void*)(menu_main.selected + 1), 0);
+            prsh_set_entry("minute_boot", (void *)(menu_main.selected + 1), 0);
 #endif
-                printf("Vectoring to 0x%08lX...\n", boot.vector);
-            } else {
-                printf("No vector address, hanging!\n");
-                panic(0);
-            }
-            break;
-        case 1: smc_power_off(); break;
-        case 2: smc_reset(); break;
-        case 3: smc_reset_no_defuse(); break;
+            printf("Vectoring to 0x%08lX...\n", boot.vector);
+        }
+        else
+        {
+            printf("No vector address, hanging!\n");
+            panic(0);
+        }
+        break;
+    case 1:
+        smc_power_off();
+        break;
+    case 2:
+        smc_reset();
+        break;
+    case 3:
+        smc_reset_no_defuse();
+        break;
     }
 
 #ifdef MEASURE_TIME
     u32 end = read32(LT_TIMER);
-    printf( "minute:        %u\n"
-            " init:         %u\n"
-            "  pre graphic  %u\n"
-            "  graphic      %u\n"
-            "  graph-> sd   %u\n"
-            "  sd           %u\n"
-            "  sd -> ini    %u\n"
-            "  ini          %u\n"
-            "  ini -> end   %u\n"
-            " loading:      %u\n"
-            " deinit        %u\n",
-            end-minute_start_time,
-            init_end-minute_start_time, graphic_start-minute_start_time, graphic_end-graphic_start, 
-            sd_start-graphic_end, sd_end-sd_start, ini_start-sd_end, ini_end-ini_start, init_end-ini_end,
-            deinit_start-init_end, end-deinit_start);
+    printf("minute:        %u\n"
+           " init:         %u\n"
+           "  pre graphic  %u\n"
+           "  graphic      %u\n"
+           "  graph-> sd   %u\n"
+           "  sd           %u\n"
+           "  sd -> ini    %u\n"
+           "  ini          %u\n"
+           "  ini -> end   %u\n"
+           " loading:      %u\n"
+           " deinit        %u\n",
+           end - minute_start_time,
+           init_end - minute_start_time, graphic_start - minute_start_time, graphic_end - graphic_start,
+           sd_start - graphic_end, sd_end - sd_start, ini_start - sd_end, ini_end - ini_start, init_end - ini_end,
+           deinit_start - init_end, end - deinit_start);
 #endif // MEASURE_TIME
 
     printf("Jumping to IOS... GO GO GO\n");
 
     // WiiU-Firmware-Emulator JIT bug
-    void (*boot_vector)(void) = (void*)boot.vector;
+    void (*boot_vector)(void) = (void *)boot.vector;
     boot_vector();
 
     return boot.vector;
 }
 
-int boot_ini(const char* key, const char* value)
+int boot_ini(const char *key, const char *value)
 {
-    if(!strcmp(key, "autoboot") && !autoboot){
-        if(!autoboot) // don't overwrite if already set by prsh
+    if (!strcmp(key, "autoboot") && !autoboot)
+    {
+        if (!autoboot) // don't overwrite if already set by prsh
             autoboot = (u32)minini_get_uint(value, 0);
-    } else if(!strcmp(key, "autoboot_file"))
+    }
+    else if (!strcmp(key, "autoboot_file"))
         strncpy(autoboot_file, value, sizeof(autoboot_file));
-    else if(!strcmp(key, "autoboot_timeout"))
+    else if (!strcmp(key, "autoboot_timeout"))
         autoboot_timeout_s = (u32)minini_get_uint(value, 3);
-    else if(!strcmp(key, "force_pause"))
+    else if (!strcmp(key, "force_pause"))
         main_force_pause = minini_get_bool(value, 0);
-    else if(!strcmp(key, "allow_legacy_patches"))
+    else if (!strcmp(key, "allow_legacy_patches"))
         main_allow_legacy_patches = minini_get_bool(value, 0);
 
     return 0;
@@ -1097,11 +1076,12 @@ int boot_ini(const char* key, const char* value)
 
 int main_autoboot(void)
 {
-    if(autoboot >= menu_main.entries || autoboot < 1){
+    if (autoboot >= menu_main.entries || autoboot < 1)
+    {
         printf("Invalid autoboot option: %i\n", autoboot);
         return -1;
     }
-    menu_main.selected = autoboot-1;
+    menu_main.selected = autoboot - 1;
     menu_item entry = menu_main.option[menu_main.selected];
     printf("Autobooting %i: %s\n", autoboot, entry.text);
     entry.callback();
@@ -1116,10 +1096,13 @@ void main_reload(void)
     boot.needs_otp = 0;
     boot.is_patched = 0;
 
-    if(boot.vector) {
+    if (boot.vector)
+    {
         boot.mode = 0;
         menu_reset();
-    } else {
+    }
+    else
+    {
         printf("Failed to load fw.img!\n");
         console_power_to_continue();
     }
@@ -1158,7 +1141,8 @@ void main_boot_ppc(void)
 
     u32 entry = 0;
     int res = ppc_load_file(path, &entry);
-    if(res) {
+    if (res)
+    {
         printf("ppc_load_file: %d\n", res);
         goto ppc_exit;
     }
@@ -1169,11 +1153,11 @@ ppc_exit:
     console_power_to_exit();
 }
 
-
 void main_quickboot_patch_slc(void)
 {
     gfx_clear(GFX_ALL, BLACK);
-    if(isfs_init(ISFSVOL_SLC)<0){
+    if (isfs_init(ISFSVOL_SLC) < 0)
+    {
         console_power_to_continue();
         return;
     }
@@ -1181,24 +1165,30 @@ void main_quickboot_patch_slc(void)
     boot.is_patched = 1;
     boot.needs_otp = 1;
 
-    if(boot.vector) {
+    if (boot.vector)
+    {
         boot.mode = 0;
         menu_reset();
-    } else {
+    }
+    else
+    {
         printf("Failed to load IOS with patches!\n");
         console_power_to_continue();
     }
 }
 
-void main_quickboot_isfshax(void){
+void main_quickboot_isfshax(void)
+{
     gfx_clear(GFX_ALL, BLACK);
-    if(isfs_init(ISFSVOL_SLC)<0){
+    if (isfs_init(ISFSVOL_SLC) < 0)
+    {
         console_power_to_continue();
         return;
     }
 
     boot.vector = boot1_patch_isfshax();
-    if(!boot.vector){
+    if (!boot.vector)
+    {
         printf("Failed to load IOS with ISFShax patch\n");
         console_power_to_continue();
         return;
@@ -1208,11 +1198,11 @@ void main_quickboot_isfshax(void){
     menu_reset();
 }
 
-
 void main_quickboot_patch(void)
 {
     gfx_clear(GFX_ALL, BLACK);
-    if(isfs_init(ISFSVOL_SLC)<0){
+    if (isfs_init(ISFSVOL_SLC) < 0)
+    {
         console_power_to_continue();
         return;
     }
@@ -1220,10 +1210,13 @@ void main_quickboot_patch(void)
     boot.is_patched = 1;
     boot.needs_otp = 1;
 
-    if(boot.vector) {
+    if (boot.vector)
+    {
         boot.mode = 0;
         menu_reset();
-    } else {
+    }
+    else
+    {
         printf("Failed to load IOS with patches!\n");
         console_power_to_continue();
     }
@@ -1236,10 +1229,13 @@ void main_swapboot_patch(void)
     boot.is_patched = 1;
     boot.needs_otp = 1;
 
-    if(boot.vector) {
+    if (boot.vector)
+    {
         boot.mode = 0;
         menu_reset();
-    } else {
+    }
+    else
+    {
         printf("Failed to load IOS with patches!\n");
         console_power_to_continue();
     }
@@ -1249,25 +1245,33 @@ void main_quickboot_patch_rednand(void)
 {
     gfx_clear(GFX_ALL, BLACK);
     int error = init_rednand();
-    if(error<0){
+    if (error < 0)
+    {
         console_power_to_continue();
         return;
     }
-    if(error){
+    if (error)
+    {
         printf("Continue\n");
-        if (console_abort_confirmation_power_no_eject_yes()){
+        if (console_abort_confirmation_power_no_eject_yes())
+        {
             clear_rednand();
             return;
         }
     }
-    if(rednand.slc.lba_length){
-        if(isfs_init(ISFSVOL_REDSLC)<0){
+    if (rednand.slc.lba_length)
+    {
+        if (isfs_init(ISFSVOL_REDSLC) < 0)
+        {
             console_power_to_continue();
             return;
         }
         boot.vector = ancast_patch_load("redslc:/sys/title/00050010/1000400a/code/fw.img", "ios.patch", sd_plugin_dir, true);
-    } else {
-        if(isfs_init(ISFSVOL_SLC)<0){
+    }
+    else
+    {
+        if (isfs_init(ISFSVOL_SLC) < 0)
+        {
             console_power_to_continue();
             return;
         }
@@ -1276,10 +1280,13 @@ void main_quickboot_patch_rednand(void)
     boot.is_patched = 1;
     boot.needs_otp = 1;
 
-    if(boot.vector) {
+    if (boot.vector)
+    {
         boot.mode = 0;
         menu_reset();
-    } else {
+    }
+    else
+    {
         printf("Failed to load IOS with patches!\n");
         console_power_to_continue();
     }
@@ -1288,13 +1295,16 @@ void main_quickboot_patch_rednand(void)
 void main_swapboot_patch_rednand(void)
 {
     int error = init_rednand();
-    if(error<0){
+    if (error < 0)
+    {
         console_power_to_continue();
         return;
     }
-    if(error){
+    if (error)
+    {
         printf("Continue\n");
-        if (console_abort_confirmation_power_no_eject_yes()){
+        if (console_abort_confirmation_power_no_eject_yes())
+        {
             clear_rednand();
             return;
         }
@@ -1304,10 +1314,13 @@ void main_swapboot_patch_rednand(void)
     boot.is_patched = 1;
     boot.needs_otp = 1;
 
-    if(boot.vector) {
+    if (boot.vector)
+    {
         boot.mode = 0;
         menu_reset();
-    } else {
+    }
+    else
+    {
         printf("Failed to load IOS with patches!\n");
         console_power_to_continue();
     }
@@ -1321,10 +1334,13 @@ void main_quickboot_fw(void)
     boot.needs_otp = 1;
     boot.is_patched = 0;
 
-    if(boot.vector) {
+    if (boot.vector)
+    {
         boot.mode = 0;
         menu_reset();
-    } else {
+    }
+    else
+    {
         printf("Failed to load 'ios.img'!\n");
         console_power_to_continue();
     }
@@ -1341,10 +1357,13 @@ void main_boot_fw(void)
     boot.needs_otp = 1;
     boot.is_patched = 0;
 
-    if(boot.vector) {
+    if (boot.vector)
+    {
         boot.mode = 0;
         menu_reset();
-    } else {
+    }
+    else
+    {
         printf("Failed to load '%s'!\n", path);
         console_power_to_continue();
     }
@@ -1352,12 +1371,12 @@ void main_boot_fw(void)
 
 void main_reset_crash(void)
 {
-	gfx_clear(GFX_ALL, BLACK);
+    gfx_clear(GFX_ALL, BLACK);
 
-	printf("Clearing SMC crash buffer...\n");
+    printf("Clearing SMC crash buffer...\n");
 
-	const char buffer[64 + 1] = "Crash buffer empty.";
-	rtc_set_panic_reason(buffer);
+    const char buffer[64 + 1] = "Crash buffer empty.";
+    rtc_set_panic_reason(buffer);
 
     console_power_to_exit();
 }
@@ -1375,24 +1394,29 @@ void main_get_crash(void)
     // or even exception type. Here we have some crap "heuristic" to determine if it's ASCII text
     // (a panic reason) or an exception dump.
     bool exception = false;
-    for(int i = 0; i < 64; i++)
+    for (int i = 0; i < 64; i++)
     {
         char c = buffer[i];
-        if(c >= 32 && c < 127) continue;
-        if(c == 10 || c == 0) continue;
+        if (c >= 32 && c < 127)
+            continue;
+        if (c == 10 || c == 0)
+            continue;
 
         exception = true;
         break;
     }
 
-    if(exception) {
-        u32* regs = (u32*)buffer;
+    if (exception)
+    {
+        u32 *regs = (u32 *)buffer;
         printf("Exception registers:\n");
         printf("  R0-R3: %08lx %08lx %08lx %08lx\n", regs[0], regs[1], regs[2], regs[3]);
         printf("  R4-R7: %08lx %08lx %08lx %08lx\n", regs[4], regs[5], regs[6], regs[7]);
         printf(" R8-R11: %08lx %08lx %08lx %08lx\n", regs[8], regs[9], regs[10], regs[11]);
         printf("R12-R15: %08lx %08lx %08lx %08lx\n", regs[12], regs[13], regs[14], regs[15]);
-    } else {
+    }
+    else
+    {
         printf("Panic reason:\n");
         printf("%s\n", buffer);
     }
@@ -1448,8 +1472,8 @@ void silly_tests()
     }
 #endif
 
-    //printf("%x\n", read32(LT_SYSCFG1));
-    
+    // printf("%x\n", read32(LT_SYSCFG1));
+
 #if 0
     set32(LT_MEMIRR, 1<<6);
 
