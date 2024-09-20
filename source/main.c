@@ -203,7 +203,8 @@ boot_info_t *init_prsh_get_bootinfo(void)
     boot_info_t *boot_info;
 
     prsh_copy_default_bootinfo(boot_info);
-    printf("copied default bootinfo");
+    printf("copied default bootinfo, which looks like this");
+    print_bootinfo(bootinfo);
 
     return boot_info;
 }
@@ -263,8 +264,7 @@ u32 _main(void *base)
     // ISFSHAX_STAGE2
     // on ISFShax we got garbage flags cause SMC/RTC are absent, so copy in default flags
     boot_info_t *bootinfo = init_prsh_get_bootinfo();
-    if (bootinfo)
-        pflags_val = bootinfo->boot_state;
+    pflags_val = bootinfo->boot_state;
 
     serial_send_u32(pflags_val);
 
@@ -379,35 +379,24 @@ u32 _main(void *base)
     // Clear all MEM0
     memset((void *)0x08000000, 0, 0x002E0000);
 
-    // Standby Mode boot doesn't need to upclock
-    if (!(pflags_val & PON_SMC_TIMER))
+    // Upclock (ignore ECO mode)
+
+    // Adjust IOP clock multiplier to 3x
+    if (!(read32(LT_IOP2X) & 0x04))
     {
-        // Adjust IOP clock multiplier to 3x
-        if (!(read32(LT_IOP2X) & 0x04))
-        {
-            latte_set_iop_clock_mult(3);
-        }
+        latte_set_iop_clock_mult(3);
     }
 
-    // PON_SMC_TIMER and an unknown power flag are set
-    if (pflags_val & (PON_SMC_TIMER | PFLAG_ENTER_BG_NORMAL_MODE))
-    {
-        // Set DcdcPowerControl2 GPIO's state
-        gpio_dcdc_pwrcnt2_set(0);
+    // Normal coldboot (ignore ECO mode)
 
-        smc_set_cc_indicator(LED_ON);
-    }
-    else
-    {
-        // Turn on ODDPower via SMC
-        smc_set_odd_power(1);
+    // Turn on ODDPower via SMC
+    smc_set_odd_power(1);
 
-        // Set DcdcPowerControl2 GPIO's state
-        gpio_dcdc_pwrcnt2_set(1);
+    // Set DcdcPowerControl2 GPIO's state
+    gpio_dcdc_pwrcnt2_set(1);
 
-        // smc_set_on_indicator(LED_ON);
-        smc_set_notification_led(LEDRAW_PURPLE);
-    }
+    // smc_set_on_indicator(LED_ON);
+    smc_set_notification_led(LEDRAW_PURPLE);
 
     bool slc_mounted = false;
 
